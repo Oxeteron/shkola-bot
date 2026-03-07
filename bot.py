@@ -37,7 +37,7 @@ def start(message):
         teacher_id = user_id
         bot.send_message(
             message.chat.id,
-            "✅ Вы назначены учителем. Используйте меню для управления.",
+            "✅ Вы назначены учителем.",
             reply_markup=teacher_menu()
         )
         return
@@ -53,10 +53,14 @@ def start(message):
     
     # Если это родитель
     if user_id in parents:
-        # Уже привязан — показываем оценки
-        show_parent_grades(message, user_id)
+        # Уже привязан — показываем меню с предметами
+        bot.send_message(
+            message.chat.id,
+            f"👤 {parents[user_id]}\nВыберите предмет:",
+            reply_markup=parent_subject_menu()
+        )
     else:
-        # Не привязан — просто текст, кнопок нет
+        # Не привязан — просим отправить запрос
         bot.send_message(
             message.chat.id,
             "👪 Чтобы подключиться к ребёнку, отправьте команду:\n"
@@ -115,11 +119,9 @@ def save_grade(message, subject, student):
         for parent_id, child in parents.items():
             if child == student:
                 try:
-                    marks = ', '.join(map(str, nums))
                     bot.send_message(
                         parent_id,
-                        f"🔔 Новая оценка!\n👤 {student}\n📚 {subject}\n➕ {nums[-1]}\n"
-                        f"Теперь: {marks}\nСредний: {avg:.2f}"
+                        f"🔔 Новая оценка по {subject}!\n➕ {nums[-1]}\nСредний: {avg:.2f}"
                     )
                 except:
                     pass
@@ -155,7 +157,7 @@ def show_parents_list(message):
 def teacher_back(message):
     bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
 
-# ================== ОБРАБОТКА ЗАПРОСОВ (для учителя) ==================
+# ================== ОБРАБОТКА ЗАПРОСОВ ==================
 @bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id)
 def handle_callbacks(call):
     data = call.data
@@ -166,13 +168,12 @@ def handle_callbacks(call):
             parents[parent_id] = student
             bot.send_message(call.message.chat.id, f"✅ Родитель привязан к {student}")
             try:
-                # Отправляем родителю приветствие с оценками
+                # Отправляем родителю меню с предметами
                 bot.send_message(
                     parent_id,
-                    f"✅ Вы привязаны к {student}. Теперь вы будете получать уведомления и видеть оценки."
+                    f"✅ Вы привязаны к {student}. Теперь вы можете смотреть оценки.",
+                    reply_markup=parent_subject_menu()
                 )
-                # Сразу показываем оценки
-                show_parent_grades(call.message, parent_id)
             except:
                 pass
     
@@ -186,16 +187,40 @@ def handle_callbacks(call):
             pass
 
 # ================== РОДИТЕЛИ ==================
+def parent_subject_menu():
+    """Меню с предметами для родителя"""
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for s in SUBJECTS:
+        markup.row(s)
+    return markup
+
+@bot.message_handler(func=lambda m: m.from_user.id in parents and m.text in SUBJECTS)
+def parent_show_grades(message):
+    user_id = message.from_user.id
+    student = parents[user_id]
+    subject = message.text
+    
+    key = f"{student}_{subject}"
+    marks = grades.get(key, [])
+    
+    if marks:
+        avg = sum(marks) / len(marks)
+        text = f"📚 {subject}\n"
+        text += f"{', '.join(map(str, marks))}\n"
+        text += f"Средний: {avg:.2f}"
+    else:
+        text = f"По предмету {subject} пока нет оценок"
+    
+    bot.send_message(message.chat.id, text)
+
 @bot.message_handler(commands=['connect'])
 def connect_request(message):
     user_id = message.from_user.id
     
-    # Учитель не может подключиться как родитель
     if user_id == teacher_id:
         bot.send_message(message.chat.id, "❌ Вы учитель")
         return
     
-    # Если уже привязан
     if user_id in parents:
         bot.send_message(message.chat.id, "❌ Вы уже привязаны к ребёнку")
         return
@@ -224,34 +249,9 @@ def connect_request(message):
             "❌ Ошибка. Используйте: /connect Имя Фамилия"
         )
 
-def show_parent_grades(message, user_id):
-    student = parents.get(user_id)
-    if not student:
-        return
-    
-    text = f"👤 {student}\n\n"
-    has_grades = False
-    
-    for subject in SUBJECTS:
-        key = f"{student}_{subject}"
-        marks = grades.get(key, [])
-        if marks:
-            has_grades = True
-            avg = sum(marks) / len(marks)
-            text += f"📚 {subject}\n"
-            text += f"{', '.join(map(str, marks))}\n"
-            text += f"Средний: {avg:.2f}\n\n"
-        else:
-            text += f"📚 {subject}\nНет оценок\n\n"
-    
-    if not has_grades:
-        text += "Пока нет оценок. Как только появятся — вы получите уведомление."
-    
-    bot.send_message(message.chat.id, text)
-
 # ================== ЗАПУСК ==================
 if __name__ == "__main__":
-    print("✅ Бот запущен с правильным разделением")
+    print("✅ Бот запущен. У родителей — меню с предметами.")
     while True:
         try:
             bot.polling(non_stop=True)
