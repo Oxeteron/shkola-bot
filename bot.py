@@ -99,20 +99,40 @@ def teacher_pick_student(message):
         markup.row(s)
     markup.row("🔙 Назад")
     msg = bot.send_message(message.chat.id, f"Выберите ученика для {subject}:", reply_markup=markup)
-    bot.register_next_step_handler(msg, lambda m: get_grade_input(m, subject))
+    bot.register_next_step_handler(msg, lambda m: choose_mode(m, subject))
 
-def get_grade_input(message, subject):
+# ================== ВЫБОР РЕЖИМА ==================
+def choose_mode(message, subject):
     if message.text == "🔙 Назад":
         bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
         return
+
     student = message.text
     if student not in STUDENTS:
         bot.send_message(message.chat.id, "❌ Ошибка", reply_markup=teacher_menu())
         return
-    msg = bot.send_message(message.chat.id, "Введите оценки через запятую (например: 5,6,7):")
-    bot.register_next_step_handler(msg, lambda m: save_grades(m, subject, student))
 
-def save_grades(message, subject, student):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row("📝 Ввести все оценки", "➕ Добавить одну оценку")
+    markup.row("🔙 Назад")
+    msg = bot.send_message(message.chat.id, f"👤 {student}\n📚 {subject}\nВыберите режим:", reply_markup=markup)
+    bot.register_next_step_handler(msg, lambda m: process_mode(m, subject, student))
+
+def process_mode(message, subject, student):
+    if message.text == "🔙 Назад":
+        bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
+        return
+
+    if message.text == "📝 Ввести все оценки":
+        msg = bot.send_message(message.chat.id, "Введите все оценки через запятую\n(например: 5,6,7,8):")
+        bot.register_next_step_handler(msg, lambda m: save_all_grades(m, subject, student))
+
+    elif message.text == "➕ Добавить одну оценку":
+        msg = bot.send_message(message.chat.id, "Введите одну новую оценку (например: 7):")
+        bot.register_next_step_handler(msg, lambda m: add_one_grade(m, subject, student))
+
+# ================== СОХРАНИТЬ ВСЕ ОЦЕНКИ ==================
+def save_all_grades(message, subject, student):
     try:
         nums = [int(x.strip()) for x in message.text.split(',')]
         avg = sum(nums) / len(nums)
@@ -122,11 +142,31 @@ def save_grades(message, subject, student):
         for pid, child in parents.items():
             if child == student:
                 try:
-                    bot.send_message(pid, f"🔔 Новая оценка по {subject}: {nums[-1]}\nСредний: {avg:.2f}")
+                    bot.send_message(pid, f"🔔 Новые оценки по {subject}: {', '.join(map(str, nums))}\nСредний: {avg:.2f}")
                 except:
                     pass
     except:
-        bot.send_message(message.chat.id, "❌ Ошибка", reply_markup=teacher_menu())
+        bot.send_message(message.chat.id, "❌ Ошибка. Введите числа через запятую", reply_markup=teacher_menu())
+
+# ================== ДОБАВИТЬ ОДНУ ОЦЕНКУ ==================
+def add_one_grade(message, subject, student):
+    try:
+        new = int(message.text.strip())
+        key = f"{student}_{subject}"
+        current = grades.get(key, [])
+        current.append(new)
+        grades[key] = current
+        avg = sum(current) / len(current)
+        bot.send_message(message.chat.id, f"✅ Оценка {new} добавлена\nТеперь: {', '.join(map(str, current))}\nСредний: {avg:.2f}", reply_markup=teacher_menu())
+
+        for pid, child in parents.items():
+            if child == student:
+                try:
+                    bot.send_message(pid, f"🔔 Новая оценка по {subject}: {new}\nТеперь: {', '.join(map(str, current))}\nСредний: {avg:.2f}")
+                except:
+                    pass
+    except:
+        bot.send_message(message.chat.id, "❌ Ошибка. Введите одно число", reply_markup=teacher_menu())
 
 # ================== ЗАПРОСЫ ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👪 Запросы")
@@ -187,7 +227,7 @@ def get_user_link(user_id):
     except:
         return f"ID: {user_id}"
 
-# ================== РОДИТЕЛИ (ТОЛЬКО СПИСОК, БЕЗ КНОПОК) ==================
+# ================== РОДИТЕЛИ (ТОЛЬКО СПИСОК) ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📋 Родители")
 def list_parents(message):
     if not parents:
@@ -274,7 +314,7 @@ def back(message):
         bot.send_message(message.chat.id, f"👤 {parents[message.from_user.id]}", reply_markup=parent_menu())
 
 if __name__ == "__main__":
-    print("✅ Бот запущен. Отвязывание через /unlink @username")
+    print("✅ Бот запущен. Два режима ввода.")
     while True:
         try:
             bot.polling(non_stop=True)
