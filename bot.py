@@ -84,7 +84,7 @@ def teacher_subjects(message):
     bot.send_message(message.chat.id, "Выберите предмет:", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text in SUBJECTS)
-def teacher_students(message):
+def teacher_students_for_grade(message):
     subject = message.text
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     for s in STUDENTS:
@@ -93,6 +93,47 @@ def teacher_students(message):
     msg = bot.send_message(message.chat.id, f"Выберите ученика для {subject}:", reply_markup=markup)
     bot.register_next_step_handler(msg, lambda m: enter_grade(m, subject))
 
+# ================== ПРОСМОТР УЧЕНИКА ==================
+@bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👨‍🎓 Ученики")
+def teacher_show_students_list(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for s in STUDENTS:
+        markup.row(s)
+    markup.row("🔙 Назад")
+    msg = bot.send_message(message.chat.id, "Выберите ученика:", reply_markup=markup)
+    bot.register_next_step_handler(msg, teacher_show_student_grades)
+
+def teacher_show_student_grades(message):
+    if message.text == "🔙 Назад":
+        bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
+        return
+    
+    student = message.text
+    if student not in STUDENTS:
+        bot.send_message(message.chat.id, "❌ Ошибка", reply_markup=teacher_menu())
+        return
+    
+    text = f"👤 {student}\n\n"
+    has_grades = False
+    
+    for subject in SUBJECTS:
+        key = f"{student}_{subject}"
+        marks = grades.get(key, [])
+        if marks:
+            has_grades = True
+            avg = sum(marks) / len(marks)
+            text += f"📚 {subject}\n"
+            text += f"{', '.join(map(str, marks))}\n"
+            text += f"Средний: {avg:.2f}\n\n"
+        else:
+            text += f"📚 {subject}\nНет оценок\n\n"
+    
+    if not has_grades:
+        text += "У ученика пока нет оценок."
+    
+    bot.send_message(message.chat.id, text, reply_markup=teacher_menu())
+
+# ================== ВВОД ОЦЕНОК ==================
 def enter_grade(message, subject):
     if message.text == "🔙 Назад":
         bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
@@ -128,6 +169,7 @@ def save_grade(message, subject, student):
     except:
         bot.send_message(message.chat.id, "❌ Ошибка. Введите числа через запятую", reply_markup=teacher_menu())
 
+# ================== ЗАПРОСЫ ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👪 Запросы")
 def show_requests(message):
     if not pending:
@@ -251,7 +293,7 @@ def connect_request(message):
 
 # ================== ЗАПУСК ==================
 if __name__ == "__main__":
-    print("✅ Бот запущен. У родителей — меню с предметами.")
+    print("✅ Бот запущен. У родителей — меню с предметами. У учителя — полное меню.")
     while True:
         try:
             bot.polling(non_stop=True)
