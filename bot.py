@@ -50,7 +50,7 @@ def teacher_menu():
     markup.row("👪 Запросы", "📋 Родители")
     return markup
 
-# ================== УЧЕНИКИ (ИСПРАВЛЕНО) ==================
+# ================== УЧЕНИКИ ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👨‍🎓 Ученики")
 def show_students_list(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -84,7 +84,7 @@ def show_student_grades(message):
         text += "Нет оценок."
     bot.send_message(message.chat.id, text, reply_markup=teacher_menu())
 
-# ================== ПРЕДМЕТЫ (УЧИТЕЛЬ) ==================
+# ================== ПРЕДМЕТЫ ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📚 Предметы")
 def teacher_subjects(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -152,7 +152,12 @@ def handle_approve(call):
         student = pending.pop(pid, None)
         if student:
             parents[pid] = student
-            bot.send_message(call.message.chat.id, f"✅ Привязан к {student}")
+            bot.answer_callback_query(call.id, "✅ Привязан")
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"✅ @{pid} привязан к {student}"
+            )
             try:
                 bot.send_message(pid, f"✅ Вы привязаны к {student}", reply_markup=parent_menu())
             except:
@@ -160,13 +165,18 @@ def handle_approve(call):
     elif data.startswith("rej_"):
         pid = int(data.split("_")[1])
         pending.pop(pid, None)
-        bot.send_message(call.message.chat.id, "❌ Отклонён")
+        bot.answer_callback_query(call.id, "❌ Отклонён")
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"❌ Запрос от @{pid} отклонён"
+        )
         try:
             bot.send_message(pid, "❌ Запрос отклонён")
         except:
             pass
 
-# ================== РОДИТЕЛИ (С КНОПКОЙ ОТВЯЗЫВАНИЯ) ==================
+# ================== РОДИТЕЛИ (ОТВЯЗЫВАНИЕ) ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📋 Родители")
 def list_parents(message):
     if not parents:
@@ -183,13 +193,18 @@ def unlink_parent(call):
     pid = int(call.data.split("_")[1])
     student = parents.pop(pid, None)
     if student:
-        bot.send_message(call.message.chat.id, f"❌ Родитель @{pid} отвязан от {student}")
+        bot.answer_callback_query(call.id, "✅ Родитель отвязан")
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"❌ Родитель @{pid} отвязан от {student}"
+        )
         try:
             bot.send_message(pid, "❌ Вы отвязаны от ученика. Свяжитесь с учителем.")
         except:
             pass
 
-# ================== РОДИТЕЛИ ==================
+# ================== РОДИТЕЛИ (ПРОСМОТР) ==================
 def parent_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     for s in SUBJECTS:
