@@ -187,41 +187,47 @@ def get_user_link(user_id):
     except:
         return f"ID: {user_id}"
 
-# ================== РОДИТЕЛИ (С КЛИКАБЕЛЬНЫМИ ССЫЛКАМИ) ==================
+# ================== РОДИТЕЛИ (ТОЛЬКО СПИСОК, БЕЗ КНОПОК) ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📋 Родители")
 def list_parents(message):
     if not parents:
         bot.send_message(message.chat.id, "Нет привязанных родителей")
         return
 
-    for pid, student in list(parents.items()):
+    text = "📋 Список родителей:\n\n"
+    for pid, student in parents.items():
         user_link = get_user_link(pid)
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("❌ Отвязать", callback_data=f"unlink_{pid}")
-        markup.add(btn)
-        bot.send_message(
-            message.chat.id,
-            f"{user_link} → {student}",
-            reply_markup=markup,
-            parse_mode="HTML"
-        )
+        text += f"{user_link} → {student}\n"
+    text += "\n❌ Чтобы отвязать, напишите:\n/unlink @username"
+    bot.send_message(message.chat.id, text, parse_mode="HTML")
 
-@bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id and call.data.startswith("unlink_"))
-def unlink_parent(call):
-    pid = int(call.data.split("_")[1])
-    student = parents.pop(pid, None)
-    if student:
-        bot.answer_callback_query(call.id, "✅ Родитель отвязан")
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=f"❌ {get_user_link(pid)} отвязан от {student}",
-            parse_mode="HTML"
-        )
-        try:
-            bot.send_message(pid, "❌ Вы отвязаны от ученика. Свяжитесь с учителем.")
-        except:
-            pass
+# ================== КОМАНДА ДЛЯ ОТВЯЗЫВАНИЯ ==================
+@bot.message_handler(commands=['unlink'])
+def unlink_by_username(message):
+    if message.from_user.id != teacher_id:
+        return
+
+    try:
+        username = message.text.split()[1].replace('@', '')
+        found = False
+        for pid, student in list(parents.items()):
+            try:
+                chat = bot.get_chat(pid)
+                if chat.username and chat.username.lower() == username.lower():
+                    parents.pop(pid)
+                    bot.send_message(message.chat.id, f"❌ Родитель @{username} отвязан от {student}")
+                    try:
+                        bot.send_message(pid, "❌ Вы отвязаны от ученика. Свяжитесь с учителем.")
+                    except:
+                        pass
+                    found = True
+                    break
+            except:
+                continue
+        if not found:
+            bot.send_message(message.chat.id, "❌ Родитель с таким username не найден")
+    except:
+        bot.send_message(message.chat.id, "❌ Используйте: /unlink @username")
 
 # ================== РОДИТЕЛИ (ПРОСМОТР) ==================
 def parent_menu():
@@ -268,7 +274,7 @@ def back(message):
         bot.send_message(message.chat.id, f"👤 {parents[message.from_user.id]}", reply_markup=parent_menu())
 
 if __name__ == "__main__":
-    print("✅ Бот запущен. Ученики, отвязывание и ссылки работают.")
+    print("✅ Бот запущен. Отвязывание через /unlink @username")
     while True:
         try:
             bot.polling(non_stop=True)
