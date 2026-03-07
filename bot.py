@@ -32,7 +32,6 @@ def start(message):
     global teacher_id
     user_id = message.from_user.id
     
-    # Первый, кто запустил бота — учитель
     if teacher_id is None:
         teacher_id = user_id
         bot.send_message(
@@ -42,7 +41,6 @@ def start(message):
         )
         return
     
-    # Если это учитель
     if user_id == teacher_id:
         bot.send_message(
             message.chat.id,
@@ -51,16 +49,13 @@ def start(message):
         )
         return
     
-    # Если это родитель
     if user_id in parents:
-        # Уже привязан — показываем меню с предметами
         bot.send_message(
             message.chat.id,
             f"👤 {parents[user_id]}\nВыберите предмет:",
             reply_markup=parent_subject_menu()
         )
     else:
-        # Не привязан — просим отправить запрос
         bot.send_message(
             message.chat.id,
             "👪 Чтобы подключиться к ребёнку, отправьте команду:\n"
@@ -75,30 +70,12 @@ def teacher_menu():
     markup.row("👪 Запросы", "📋 Родители")
     return markup
 
-@bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📚 Предметы")
-def teacher_subjects(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for s in SUBJECTS:
-        markup.row(s)
-    markup.row("🔙 Назад")
-    bot.send_message(message.chat.id, "Выберите предмет:", reply_markup=markup)
-
-@bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text in SUBJECTS)
-def teacher_students_for_grade(message):
-    subject = message.text
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for s in STUDENTS:
-        markup.row(s)
-    markup.row("🔙 Назад")
-    msg = bot.send_message(message.chat.id, f"Выберите ученика для {subject}:", reply_markup=markup)
-    bot.register_next_step_handler(msg, lambda m: enter_grade(m, subject))
-
-# ================== ПРОСМОТР УЧЕНИКА ==================
+# ================== КНОПКА "УЧЕНИКИ" (ИСПРАВЛЕНО) ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👨‍🎓 Ученики")
 def teacher_show_students_list(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for s in STUDENTS:
-        markup.row(s)
+    for student in STUDENTS:
+        markup.row(student)
     markup.row("🔙 Назад")
     msg = bot.send_message(message.chat.id, "Выберите ученика:", reply_markup=markup)
     bot.register_next_step_handler(msg, teacher_show_student_grades)
@@ -110,7 +87,7 @@ def teacher_show_student_grades(message):
     
     student = message.text
     if student not in STUDENTS:
-        bot.send_message(message.chat.id, "❌ Ошибка", reply_markup=teacher_menu())
+        bot.send_message(message.chat.id, "❌ Ученик не найден", reply_markup=teacher_menu())
         return
     
     text = f"👤 {student}\n\n"
@@ -133,7 +110,25 @@ def teacher_show_student_grades(message):
     
     bot.send_message(message.chat.id, text, reply_markup=teacher_menu())
 
-# ================== ВВОД ОЦЕНОК ==================
+# ================== ПРЕДМЕТЫ (ДЛЯ УЧИТЕЛЯ) ==================
+@bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📚 Предметы")
+def teacher_subjects(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for s in SUBJECTS:
+        markup.row(s)
+    markup.row("🔙 Назад")
+    bot.send_message(message.chat.id, "Выберите предмет:", reply_markup=markup)
+
+@bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text in SUBJECTS)
+def teacher_students_for_grade(message):
+    subject = message.text
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for s in STUDENTS:
+        markup.row(s)
+    markup.row("🔙 Назад")
+    msg = bot.send_message(message.chat.id, f"Выберите ученика для {subject}:", reply_markup=markup)
+    bot.register_next_step_handler(msg, lambda m: enter_grade(m, subject))
+
 def enter_grade(message, subject):
     if message.text == "🔙 Назад":
         bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
@@ -156,7 +151,6 @@ def save_grade(message, subject, student):
         
         bot.send_message(message.chat.id, f"✅ Сохранено!\nСредний: {avg:.2f}", reply_markup=teacher_menu())
         
-        # Уведомляем родителя
         for parent_id, child in parents.items():
             if child == student:
                 try:
@@ -169,7 +163,7 @@ def save_grade(message, subject, student):
     except:
         bot.send_message(message.chat.id, "❌ Ошибка. Введите числа через запятую", reply_markup=teacher_menu())
 
-# ================== ЗАПРОСЫ ==================
+# ================== ЗАПРОСЫ РОДИТЕЛЕЙ ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "👪 Запросы")
 def show_requests(message):
     if not pending:
@@ -199,7 +193,7 @@ def show_parents_list(message):
 def teacher_back(message):
     bot.send_message(message.chat.id, "Панель учителя:", reply_markup=teacher_menu())
 
-# ================== ОБРАБОТКА ЗАПРОСОВ ==================
+# ================== ОБРАБОТКА ПОДТВЕРЖДЕНИЙ ==================
 @bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id)
 def handle_callbacks(call):
     data = call.data
@@ -210,7 +204,6 @@ def handle_callbacks(call):
             parents[parent_id] = student
             bot.send_message(call.message.chat.id, f"✅ Родитель привязан к {student}")
             try:
-                # Отправляем родителю меню с предметами
                 bot.send_message(
                     parent_id,
                     f"✅ Вы привязаны к {student}. Теперь вы можете смотреть оценки.",
@@ -218,7 +211,6 @@ def handle_callbacks(call):
                 )
             except:
                 pass
-    
     elif data.startswith("reject_"):
         parent_id = int(data.split("_")[1])
         pending.pop(parent_id, None)
@@ -230,7 +222,6 @@ def handle_callbacks(call):
 
 # ================== РОДИТЕЛИ ==================
 def parent_subject_menu():
-    """Меню с предметами для родителя"""
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     for s in SUBJECTS:
         markup.row(s)
@@ -241,7 +232,6 @@ def parent_show_grades(message):
     user_id = message.from_user.id
     student = parents[user_id]
     subject = message.text
-    
     key = f"{student}_{subject}"
     marks = grades.get(key, [])
     
@@ -293,7 +283,7 @@ def connect_request(message):
 
 # ================== ЗАПУСК ==================
 if __name__ == "__main__":
-    print("✅ Бот запущен. У родителей — меню с предметами. У учителя — полное меню.")
+    print("✅ Бот запущен. Кнопка 'Ученики' работает.")
     while True:
         try:
             bot.polling(non_stop=True)
