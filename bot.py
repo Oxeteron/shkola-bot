@@ -140,7 +140,7 @@ def show_pending(message):
             types.InlineKeyboardButton("✅", callback_data=f"app_{pid}"),
             types.InlineKeyboardButton("❌", callback_data=f"rej_{pid}")
         )
-        bot.send_message(message.chat.id, f"@{pid} → {student}", reply_markup=markup)
+        bot.send_message(message.chat.id, f"Запрос от {get_user_link(pid)} для {student}", reply_markup=markup, parse_mode="HTML")
 
 @bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id)
 def handle_approve(call):
@@ -154,7 +154,8 @@ def handle_approve(call):
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text=f"✅ @{pid} привязан к {student}"
+                text=f"✅ {get_user_link(pid)} привязан к {student}",
+                parse_mode="HTML"
             )
             try:
                 bot.send_message(pid, f"✅ Вы привязаны к {student}", reply_markup=parent_menu())
@@ -167,14 +168,26 @@ def handle_approve(call):
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text=f"❌ Запрос от @{pid} отклонён"
+            text=f"❌ Запрос от {get_user_link(pid)} отклонён",
+            parse_mode="HTML"
         )
         try:
             bot.send_message(pid, "❌ Запрос отклонён")
         except:
             pass
 
-# ================== РОДИТЕЛИ (ОТВЯЗЫВАНИЕ) ==================
+# ================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ==================
+def get_user_link(user_id):
+    try:
+        chat = bot.get_chat(user_id)
+        if chat.username:
+            return f"@{chat.username}"
+        else:
+            return f"<a href='tg://user?id={user_id}'>пользователь</a>"
+    except:
+        return f"ID: {user_id}"
+
+# ================== РОДИТЕЛИ (С КЛИКАБЕЛЬНЫМИ ССЫЛКАМИ) ==================
 @bot.message_handler(func=lambda m: m.from_user.id == teacher_id and m.text == "📋 Родители")
 def list_parents(message):
     if not parents:
@@ -182,10 +195,16 @@ def list_parents(message):
         return
 
     for pid, student in list(parents.items()):
+        user_link = get_user_link(pid)
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("❌ Отвязать", callback_data=f"unlink_{pid}")
         markup.add(btn)
-        bot.send_message(message.chat.id, f"@{pid} → {student}", reply_markup=markup)
+        bot.send_message(
+            message.chat.id,
+            f"{user_link} → {student}",
+            reply_markup=markup,
+            parse_mode="HTML"
+        )
 
 @bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id and call.data.startswith("unlink_"))
 def unlink_parent(call):
@@ -196,7 +215,8 @@ def unlink_parent(call):
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text=f"❌ Родитель @{pid} отвязан от {student}"
+            text=f"❌ {get_user_link(pid)} отвязан от {student}",
+            parse_mode="HTML"
         )
         try:
             bot.send_message(pid, "❌ Вы отвязаны от ученика. Свяжитесь с учителем.")
@@ -236,7 +256,7 @@ def connect_request(message):
         pending[message.from_user.id] = name
         bot.send_message(message.chat.id, f"✅ Запрос для {name} отправлен учителю")
         if teacher_id:
-            bot.send_message(teacher_id, f"🔔 Запрос от @{message.from_user.id} для {name}")
+            bot.send_message(teacher_id, f"🔔 Запрос от {get_user_link(message.from_user.id)} для {name}", parse_mode="HTML")
     except:
         bot.send_message(message.chat.id, "❌ Ошибка. Используйте: /connect Имя Фамилия")
 
@@ -248,7 +268,7 @@ def back(message):
         bot.send_message(message.chat.id, f"👤 {parents[message.from_user.id]}", reply_markup=parent_menu())
 
 if __name__ == "__main__":
-    print("✅ Бот запущен. Ученики и отвязывание работают.")
+    print("✅ Бот запущен. Ученики, отвязывание и ссылки работают.")
     while True:
         try:
             bot.polling(non_stop=True)
