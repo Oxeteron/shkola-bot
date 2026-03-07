@@ -1,7 +1,7 @@
 import telebot
 from telebot import types
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 TOKEN = "8708884664:AAEBTT0XXXHdAu0titi59DGc7VTyUSNMpKA"
 bot = telebot.TeleBot(TOKEN)
@@ -152,7 +152,8 @@ def add_one_grade(message, subject, student):
         current.append(new)
         grades[key] = current
         avg = sum(current) / len(current)
-        now = datetime.now().strftime("%d.%m.%Y %H:%M")
+        # Правильное время для Беларуси (UTC+3)
+        now = (datetime.now() + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M")
         bot.send_message(message.chat.id, f"✅ Оценка {new} добавлена\nТеперь: {', '.join(map(str, current))}\nСредний: {avg:.2f}", reply_markup=teacher_menu())
 
         for pid, child in parents.items():
@@ -319,7 +320,7 @@ def back(message):
         bot.send_message(message.chat.id, f"👤 {parents[message.from_user.id]}", reply_markup=parent_menu())
 
 if __name__ == "__main__":
-    print("✅ Бот запущен. Уведомления только при одной оценке, с датой.")
+    print("✅ Бот запущен. Время правильное (UTC+3).")
     while True:
         try:
             bot.polling(non_stop=True)
