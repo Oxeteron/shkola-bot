@@ -1,7 +1,5 @@
 import telebot
 from telebot import types
-import json
-import os
 import time
 
 TOKEN = "8708884664:AAEBTT0XXXHdAu0titi59DGc7VTyUSNMpKA"
@@ -185,7 +183,8 @@ def list_parents(message):
 
     for pid, student in list(parents.items()):
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Отвязать", callback_data=f"unlink_{pid}"))
+        btn = types.InlineKeyboardButton("❌ Отвязать", callback_data=f"unlink_{pid}")
+        markup.add(btn)
         bot.send_message(message.chat.id, f"@{pid} → {student}", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.from_user.id == teacher_id and call.data.startswith("unlink_"))
@@ -249,7 +248,7 @@ def back(message):
         bot.send_message(message.chat.id, f"👤 {parents[message.from_user.id]}", reply_markup=parent_menu())
 
 if __name__ == "__main__":
-    print("✅ Бот запущен. Ученики работают. Отвязывание работает.")
+    print("✅ Бот запущен. Ученики и отвязывание работают.")
     while True:
         try:
             bot.polling(non_stop=True)
